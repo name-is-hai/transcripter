@@ -19,7 +19,7 @@ jobs:
     name: Test core and CLI
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6, Node 24
       - name: Install test media tools
         run: |
           sudo apt-get update
@@ -36,11 +36,19 @@ jobs:
         run: cargo test --locked --lib --test cli
 
   linux:
-    name: Linux x86_64 portable executable
+    name: Linux ${{ matrix.arch }} portable executable
     needs: test
-    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            arch: x86_64
+          - runner: ubuntu-22.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6, Node 24
       - name: Install native build dependencies
         run: |
           sudo apt-get update
@@ -73,23 +81,23 @@ jobs:
           chmod +x scripts/package-linux.sh
           scripts/package-linux.sh \
             target/release/transcripter \
-            dist/transcripter-linux-x86_64.run
-          dist/transcripter-linux-x86_64.run licenses
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+            "dist/transcripter-linux-${{ matrix.arch }}.run"
+          "dist/transcripter-linux-${{ matrix.arch }}.run" licenses
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6, Node 24
         with:
-          name: release-linux-x86_64
-          path: dist/transcripter-linux-x86_64.run
+          name: release-linux-${{ matrix.arch }}
+          path: dist/transcripter-linux-${{ matrix.arch }}.run
           if-no-files-found: error
 
-  windows:
-    name: Windows x86_64 portable executable
+  windows_ffmpeg:
+    name: Build Windows FFmpeg helpers
     needs: test
     runs-on: windows-2025
     env:
       CHERE_INVOKING: "1"
       MSYSTEM: UCRT64
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6, Node 24
       - name: Install MinGW build tools
         shell: 'C:\msys64\usr\bin\bash.exe -leo pipefail {0}'
         run: |
@@ -106,21 +114,57 @@ jobs:
           workspace=$(cygpath -u "$GITHUB_WORKSPACE")
           cd "$workspace"
           scripts/build-ffmpeg.sh /tmp/transcripter-ffmpeg
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6, Node 24
+        with:
+          name: build-windows-ffmpeg-x86_64
+          path: |
+            C:\msys64\tmp\transcripter-ffmpeg\bin\ffmpeg.exe
+            C:\msys64\tmp\transcripter-ffmpeg\bin\ffprobe.exe
+          if-no-files-found: error
+          retention-days: 1
+
+  windows:
+    name: Windows ${{ matrix.arch }} portable executable
+    needs: [test, windows_ffmpeg]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-2025
+            target: x86_64-pc-windows-msvc
+            arch: x86_64
+          - runner: windows-11-arm
+            target: aarch64-pc-windows-msvc
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6, Node 24
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8, Node 24
+        with:
+          name: build-windows-ffmpeg-x86_64
+          path: helper
+      - name: Verify bundled helper compatibility
+        shell: pwsh
+        run: '& .\helper\ffprobe.exe -version'
+      - name: Select Rust target
+        shell: pwsh
+        run: rustup target add "${{ matrix.target }}"
       - name: Build unified GUI and CLI executable
         shell: pwsh
         env:
-          TRANSCRIPTER_FFMPEG_BIN: C:\msys64\tmp\transcripter-ffmpeg\bin\ffmpeg.exe
-          TRANSCRIPTER_FFPROBE_BIN: C:\msys64\tmp\transcripter-ffmpeg\bin\ffprobe.exe
+          TRANSCRIPTER_FFMPEG_BIN: ${{ github.workspace }}\helper\ffmpeg.exe
+          TRANSCRIPTER_FFPROBE_BIN: ${{ github.workspace }}\helper\ffprobe.exe
           RUSTFLAGS: -C target-feature=+crt-static
         run: |
-          cargo build --release --locked --features gui,bundled-media-tools --bin transcripter
+          cargo build --release --locked --target "${{ matrix.target }}" --features gui,bundled-media-tools --bin transcripter
           New-Item -ItemType Directory -Force dist | Out-Null
-          Copy-Item target\release\transcripter.exe dist\transcripter-windows-x86_64.exe
-          & .\dist\transcripter-windows-x86_64.exe licenses
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+          $output = "dist\transcripter-windows-${{ matrix.arch }}.exe"
+          Copy-Item "target\${{ matrix.target }}\release\transcripter.exe" $output
+          & (Resolve-Path $output) licenses
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6, Node 24
         with:
-          name: release-windows-x86_64
-          path: dist/transcripter-windows-x86_64.exe
+          name: release-windows-${{ matrix.arch }}
+          path: dist/transcripter-windows-${{ matrix.arch }}.exe
           if-no-files-found: error
 
   macos:
@@ -140,7 +184,7 @@ jobs:
     env:
       MACOSX_DEPLOYMENT_TARGET: "12.0"
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6, Node 24
       - name: Select Rust target
         run: rustup target add "${{ matrix.target }}"
       - name: Build minimal LGPL FFmpeg helpers
@@ -164,7 +208,7 @@ jobs:
             "${{ matrix.arch }}" \
             "dist/transcripter-macos-${{ matrix.arch }}.tar.gz"
           "target/${{ matrix.target }}/release/transcripter" licenses
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6, Node 24
         with:
           name: release-macos-${{ matrix.arch }}
           path: dist/transcripter-macos-${{ matrix.arch }}.tar.gz
@@ -178,8 +222,8 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6, Node 24
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8, Node 24
         with:
           pattern: release-*
           path: release
@@ -195,7 +239,9 @@ jobs:
           cd release
           sha256sum \
             transcripter-linux-x86_64.run \
+            transcripter-linux-arm64.run \
             transcripter-windows-x86_64.exe \
+            transcripter-windows-arm64.exe \
             transcripter-macos-x86_64.tar.gz \
             transcripter-macos-arm64.tar.gz \
             ffmpeg-${FFMPEG_VERSION}.tar.xz \
