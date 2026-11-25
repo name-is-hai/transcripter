@@ -17,10 +17,13 @@ archive="$work/ffmpeg.tar.xz"
 
 curl --fail --location --silent --show-error "$FFMPEG_URL" --output "$archive"
 if command -v sha256sum >/dev/null 2>&1; then
-  printf '%s  %s\n' "$FFMPEG_SHA256" "$archive" | sha256sum --check --status
+  actual=$(sha256sum "$archive" | awk '{print $1}')
 else
   actual=$(shasum -a 256 "$archive" | awk '{print $1}')
-  [[ "$actual" == "$FFMPEG_SHA256" ]]
+fi
+if [[ "$actual" != "$FFMPEG_SHA256" ]]; then
+  echo "FFmpeg source checksum mismatch: expected $FFMPEG_SHA256, got $actual" >&2
+  exit 1
 fi
 
 tar -xf "$archive" -C "$work"
@@ -53,8 +56,13 @@ configure_flags=(
   --extra-version=transcripter
 )
 
-if [[ "${MSYSTEM:-}" == MINGW* || "${MSYSTEM:-}" == UCRT* ]]; then
-  configure_flags+=(--extra-ldflags=-static)
+if [[ "${OS:-}" == Windows_NT || "${MSYSTEM:-}" == MINGW* || "${MSYSTEM:-}" == UCRT* ]]; then
+  configure_flags+=(
+    --arch=x86_64
+    --cc=gcc
+    --target-os=mingw32
+    --extra-ldflags=-static
+  )
 fi
 
 ./configure "${configure_flags[@]}"

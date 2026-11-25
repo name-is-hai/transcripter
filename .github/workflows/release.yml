@@ -85,6 +85,9 @@ jobs:
     name: Windows x86_64 portable executable
     needs: test
     runs-on: windows-2025
+    env:
+      CHERE_INVOKING: "1"
+      MSYSTEM: UCRT64
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Install MinGW build tools
