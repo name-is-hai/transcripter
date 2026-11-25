@@ -1,6 +1,6 @@
 [package]
 name = "transcripter"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "Inspect, extract, and add subtitle tracks in MKV files"
 authors = ["Vu Dao Ngoc Hai"]
