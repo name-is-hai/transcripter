@@ -1,0 +1,214 @@
+name: Build portable release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  FFMPEG_VERSION: 8.0.1
+  FFMPEG_SHA256: 05ee0b03119b45c0bdb4df654b96802e909e0a752f72e4fe3794f487229e5a41
+
+jobs:
+  test:
+    name: Test core and CLI
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install test media tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ffmpeg
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Verify release tag matches Cargo version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(python3 - <<'PY'
+          import tomllib
+          with open("Cargo.toml", "rb") as file:
+              print(tomllib.load(file)["package"]["version"])
+          PY
+          )
+          test "$GITHUB_REF_NAME" = "v$version"
+      - name: Run tests
+        run: cargo test --locked --lib --test cli
+
+  linux:
+    name: Linux x86_64 portable executable
+    needs: test
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            build-essential \
+            curl \
+            ffmpeg \
+            libfontconfig1-dev \
+            libfreetype6-dev \
+            libwayland-dev \
+            libxcb1-dev \
+            libxkbcommon-dev \
+            libxkbcommon-x11-dev \
+            pkg-config \
+            xz-utils
+      - name: Build minimal LGPL FFmpeg helpers
+        run: scripts/build-ffmpeg.sh "$RUNNER_TEMP/ffmpeg"
+      - name: Test the embedded helpers
+        env:
+          TRANSCRIPTER_FFMPEG_BIN: ${{ runner.temp }}/ffmpeg/bin/ffmpeg
+          TRANSCRIPTER_FFPROBE_BIN: ${{ runner.temp }}/ffmpeg/bin/ffprobe
+        run: cargo test --locked --features bundled-media-tools --lib --test cli
+      - name: Build unified GUI and CLI executable
+        env:
+          TRANSCRIPTER_FFMPEG_BIN: ${{ runner.temp }}/ffmpeg/bin/ffmpeg
+          TRANSCRIPTER_FFPROBE_BIN: ${{ runner.temp }}/ffmpeg/bin/ffprobe
+        run: cargo build --release --locked --features gui,bundled-media-tools --bin transcripter
+      - name: Package one-file Linux executable
+        run: |
+          chmod +x scripts/package-linux.sh
+          scripts/package-linux.sh \
+            target/release/transcripter \
+            dist/transcripter-linux-x86_64.run
+          dist/transcripter-linux-x86_64.run licenses
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-linux-x86_64
+          path: dist/transcripter-linux-x86_64.run
+          if-no-files-found: error
+
+  windows:
+    name: Windows x86_64 portable executable
+    needs: test
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install MinGW build tools
+        shell: 'C:\msys64\usr\bin\bash.exe -leo pipefail {0}'
+        run: |
+          pacman -S --noconfirm --needed \
+            curl \
+            diffutils \
+            make \
+            mingw-w64-ucrt-x86_64-gcc \
+            xz
+      - name: Build minimal LGPL FFmpeg helpers
+        shell: 'C:\msys64\usr\bin\bash.exe -leo pipefail {0}'
+        run: |
+          export PATH="/ucrt64/bin:$PATH"
+          workspace=$(cygpath -u "$GITHUB_WORKSPACE")
+          cd "$workspace"
+          scripts/build-ffmpeg.sh /tmp/transcripter-ffmpeg
+      - name: Build unified GUI and CLI executable
+        shell: pwsh
+        env:
+          TRANSCRIPTER_FFMPEG_BIN: C:\msys64\tmp\transcripter-ffmpeg\bin\ffmpeg.exe
+          TRANSCRIPTER_FFPROBE_BIN: C:\msys64\tmp\transcripter-ffmpeg\bin\ffprobe.exe
+          RUSTFLAGS: -C target-feature=+crt-static
+        run: |
+          cargo build --release --locked --features gui,bundled-media-tools --bin transcripter
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item target\release\transcripter.exe dist\transcripter-windows-x86_64.exe
+          dist\transcripter-windows-x86_64.exe licenses
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-windows-x86_64
+          path: dist/transcripter-windows-x86_64.exe
+          if-no-files-found: error
+
+  macos:
+    name: macOS ${{ matrix.arch }} application
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+            arch: x86_64
+          - runner: macos-15
+            target: aarch64-apple-darwin
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "12.0"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Select Rust target
+        run: rustup target add "${{ matrix.target }}"
+      - name: Build minimal LGPL FFmpeg helpers
+        run: scripts/build-ffmpeg.sh "$RUNNER_TEMP/ffmpeg"
+      - name: Build unified GUI and CLI executable
+        env:
+          TRANSCRIPTER_FFMPEG_BIN: ${{ runner.temp }}/ffmpeg/bin/ffmpeg
+          TRANSCRIPTER_FFPROBE_BIN: ${{ runner.temp }}/ffmpeg/bin/ffprobe
+        run: >-
+          cargo build --release --locked
+          --target "${{ matrix.target }}"
+          --features gui,bundled-media-tools
+          --bin transcripter
+      - name: Package macOS application
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          chmod +x scripts/package-macos.sh
+          scripts/package-macos.sh \
+            "target/${{ matrix.target }}/release/transcripter" \
+            "${{ matrix.arch }}" \
+            "dist/transcripter-macos-${{ matrix.arch }}.tar.gz"
+          "target/${{ matrix.target }}/release/transcripter" licenses
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-macos-${{ matrix.arch }}
+          path: dist/transcripter-macos-${{ matrix.arch }}.tar.gz
+          if-no-files-found: error
+
+  release:
+    name: Publish tagged release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [linux, windows, macos]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: release-*
+          path: release
+          merge-multiple: true
+      - name: Add license materials and checksums
+        run: |
+          curl --fail --location --silent --show-error \
+            "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz" \
+            --output "release/ffmpeg-${FFMPEG_VERSION}.tar.xz"
+          echo "$FFMPEG_SHA256  release/ffmpeg-${FFMPEG_VERSION}.tar.xz" \
+            | sha256sum --check
+          cp LICENSE THIRD_PARTY_NOTICES.md release/
+          cd release
+          sha256sum \
+            transcripter-linux-x86_64.run \
+            transcripter-windows-x86_64.exe \
+            transcripter-macos-x86_64.tar.gz \
+            transcripter-macos-arm64.tar.gz \
+            ffmpeg-${FFMPEG_VERSION}.tar.xz \
+            LICENSE \
+            THIRD_PARTY_NOTICES.md \
+            > SHA256SUMS
+      - name: Create GitHub Release from tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            release/* \
+            --generate-notes \
+            --title "Transcripter ${GITHUB_REF_NAME}" \
+            --verify-tag
