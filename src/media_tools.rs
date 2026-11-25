@@ -172,12 +172,12 @@ fn create_private_directory(path: &Path) -> Result<()> {
 }
 
 #[cfg(feature = "bundled-media-tools")]
-fn ensure_executable(path: &Path) -> Result<()> {
+fn ensure_executable(_path: &Path) -> Result<()> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt as _;
-        fs::set_permissions(path, fs::Permissions::from_mode(0o700))
-            .with_context(|| format!("could not make {} executable", path.display()))?;
+        fs::set_permissions(_path, fs::Permissions::from_mode(0o700))
+            .with_context(|| format!("could not make {} executable", _path.display()))?;
     }
     Ok(())
 }
