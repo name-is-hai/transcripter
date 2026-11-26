@@ -155,17 +155,30 @@ jobs:
           TRANSCRIPTER_FFMPEG_BIN: ${{ github.workspace }}\helper\ffmpeg.exe
           TRANSCRIPTER_FFPROBE_BIN: ${{ github.workspace }}\helper\ffprobe.exe
           RUSTFLAGS: -C target-feature=+crt-static
+        run: >-
+          cargo build --release --locked
+          --target "${{ matrix.target }}"
+          --features gui,bundled-media-tools
+          --bin transcripter
+      - name: Package Windows executable
+        shell: pwsh
         run: |
-          cargo build --release --locked --target "${{ matrix.target }}" --features gui,bundled-media-tools --bin transcripter
           New-Item -ItemType Directory -Force dist | Out-Null
-          $output = "dist\transcripter-windows-${{ matrix.arch }}.exe"
-          Copy-Item "target\${{ matrix.target }}\release\transcripter.exe" $output
-          & (Resolve-Path $output) licenses
+          Copy-Item "target\${{ matrix.target }}\release\transcripter.exe" "dist\transcripter-windows-${{ matrix.arch }}.exe"
+          Get-Item "dist\transcripter-windows-${{ matrix.arch }}.exe"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6, Node 24
         with:
           name: release-windows-${{ matrix.arch }}
           path: dist/transcripter-windows-${{ matrix.arch }}.exe
           if-no-files-found: error
+      - name: Smoke-test Windows executable
+        shell: pwsh
+        run: |
+          $executable = (Resolve-Path "dist\transcripter-windows-${{ matrix.arch }}.exe").Path
+          $process = Start-Process -FilePath $executable -ArgumentList "--version" -NoNewWindow -Wait -PassThru
+          if ($process.ExitCode -ne 0) {
+            throw "Windows executable exited with code $($process.ExitCode)"
+          }
 
   macos:
     name: macOS ${{ matrix.arch }} application
