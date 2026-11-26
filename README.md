@@ -1,6 +1,6 @@
 # Transcripter
 
-Transcripter is a Rust desktop application and CLI for inspecting, extracting, and adding subtitle tracks in MKV files. The interface uses the official [`gpui`](https://crates.io/crates/gpui) crate documented at [gpui.rs](https://gpui.rs/).
+Transcripter is a Rust desktop application and CLI for inspecting, extracting, and adding subtitle tracks in MKV files. The interface uses the official [`gpui`](https://crates.io/crates/gpui) crate documented at [gpui.rs](https://gpui.rs/). GPUI 0.2.2 is vendored with one Windows-only compatibility change that removes an unresolved ICU entry-point import; details and its Apache-2.0 license are in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 
 A release executable contains both interfaces:
 
@@ -93,8 +93,8 @@ The workflow in `.github/workflows/release.yml` builds Linux and Windows applica
 Create a release with:
 
 ```bash
-git tag v0.1.5
-git push origin v0.1.5
+git tag v0.1.6
+git push origin v0.1.6
 ```
 
 A tag run creates the GitHub Release and uploads all platform packages, `SHA256SUMS`, notices, and the exact FFmpeg source archive required for license compliance. A manual run builds downloadable workflow artifacts but does not create a GitHub Release.

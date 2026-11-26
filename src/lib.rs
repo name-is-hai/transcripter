@@ -7,6 +7,11 @@ mod media_tools;
 pub const THIRD_PARTY_NOTICE: &str = concat!(
     "Transcripter is distributed under the MIT License:\n\n",
     include_str!("../LICENSE"),
+    "\nGPUI notice:\n",
+    "Transcripter uses a minimally patched vendored copy of official GPUI 0.2.2 under Apache-2.0.\n",
+    "Original package: https://crates.io/crates/gpui/0.2.2\n",
+    "Patch: replace the Windows u_strlen import with an equivalent Rust UTF-16 terminator scan.\n\n",
+    include_str!("../licenses/GPUI-APACHE-2.0.txt"),
     "\nFFmpeg notice:\n",
     "Transcripter release builds include FFmpeg 8.0.1, used as separate helper programs under LGPL-2.1-or-later.\n",
     "FFmpeg source: https://ffmpeg.org/releases/ffmpeg-8.0.1.tar.xz\n",

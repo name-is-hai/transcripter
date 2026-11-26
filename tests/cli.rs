@@ -101,6 +101,8 @@ fn cli_inspects_extracts_and_adds_without_touching_source() {
     assert!(licenses.status.success());
     let license_text = String::from_utf8(licenses.stdout).unwrap();
     assert!(license_text.contains("Vu Dao Ngoc Hai"));
+    assert!(license_text.contains("official GPUI 0.2.2"));
+    assert!(license_text.contains("Apache License"));
     assert!(license_text.contains("FFmpeg 8.0.1"));
     assert!(license_text.contains("GNU LESSER GENERAL PUBLIC LICENSE"));
 

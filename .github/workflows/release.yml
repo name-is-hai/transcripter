@@ -248,7 +248,7 @@ jobs:
             --output "release/ffmpeg-${FFMPEG_VERSION}.tar.xz"
           echo "$FFMPEG_SHA256  release/ffmpeg-${FFMPEG_VERSION}.tar.xz" \
             | sha256sum --check
-          cp LICENSE THIRD_PARTY_NOTICES.md release/
+          cp LICENSE THIRD_PARTY_NOTICES.md licenses/GPUI-APACHE-2.0.txt release/
           cd release
           sha256sum \
             transcripter-linux-x86_64.run \
@@ -259,6 +259,7 @@ jobs:
             transcripter-macos-arm64.tar.gz \
             ffmpeg-${FFMPEG_VERSION}.tar.xz \
             LICENSE \
+            GPUI-APACHE-2.0.txt \
             THIRD_PARTY_NOTICES.md \
             > SHA256SUMS
       - name: Create GitHub Release from tag

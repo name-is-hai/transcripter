@@ -1,5 +1,13 @@
 # Third-party notices
 
+## GPUI 0.2.2
+
+Transcripter uses the official [GPUI](https://gpui.rs/) source under Apache-2.0. The release is vendored in `vendor/gpui` so the Windows build can replace one `u_strlen` call with an equivalent Rust UTF-16 terminator scan. This removes GPUI's startup dependency on the unresolved `icuuc.dll` entry point without changing its behavior.
+
+- Original package: <https://crates.io/crates/gpui/0.2.2>
+- Vendored source: [`vendor/gpui`](vendor/gpui)
+- License text: [`licenses/GPUI-APACHE-2.0.txt`](licenses/GPUI-APACHE-2.0.txt)
+
 ## FFmpeg 8.0.1
 
 Transcripter release executables contain separate `ffmpeg` and `ffprobe` helper programs from the [FFmpeg project](https://ffmpeg.org/). They are built without GPL or nonfree components and are used under LGPL-2.1-or-later.
