@@ -1,6 +1,6 @@
 [package]
 name = "transcripter"
-version = "0.1.6"
+version = "0.1.7"
 edition = "2024"
 description = "Inspect, extract, and add subtitle tracks in MKV files"
 authors = ["Vu Dao Ngoc Hai"]
@@ -10,7 +10,7 @@ license = "MIT"
 default = []
 bundled-media-tools = ["dep:sha2"]
 gui-core = ["dep:gpui"]
-gui = ["gui-core", "gpui/wayland", "gpui/x11"]
+gui = ["gui-core", "gpui/wayland", "gpui/windows-manifest", "gpui/x11"]
 
 [dependencies]
 anyhow = "1.0"

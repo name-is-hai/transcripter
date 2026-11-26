@@ -93,8 +93,8 @@ The workflow in `.github/workflows/release.yml` builds Linux and Windows applica
 Create a release with:
 
 ```bash
-git tag v0.1.6
-git push origin v0.1.6
+git tag v0.1.7
+git push origin v0.1.7
 ```
 
 A tag run creates the GitHub Release and uploads all platform packages, `SHA256SUMS`, notices, and the exact FFmpeg source archive required for license compliance. A manual run builds downloadable workflow artifacts but does not create a GitHub Release.
